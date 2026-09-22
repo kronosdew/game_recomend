@@ -10,3 +10,10 @@ export const RELEASE_WINDOW_DAYS = 90;
 
 export const MMR_LAMBDA = 0.7;
 export const MMR_K = 20;
+
+// Sahip olunan oyunların SteamSpy meta verisini çekerken kullanılan sınırlar
+// (R4): zevk vektörü en çok oynanan oyunlarca belirlendiği için 25 oyun
+// yeterli sinyali taşır, ve SteamSpy ~1 istek/sn sınırına saygı için
+// ardışık istekler arasında en az bu kadar boşluk bırakılır.
+export const OWNED_GAMES_META_CAP = 25;
+export const STEAMSPY_FETCH_SPACING_MS = 1100;

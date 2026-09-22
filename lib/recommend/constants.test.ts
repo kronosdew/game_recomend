@@ -9,4 +9,9 @@ describe('constants', () => {
     expect(C.RELEASE_WINDOW_DAYS).toBe(90);
     expect(C.MMR_LAMBDA).toBeCloseTo(0.7);
   });
+
+  it('sahip olunan oyun meta verisi çekim sınırlarını taşır (R4)', () => {
+    expect(C.OWNED_GAMES_META_CAP).toBe(25);
+    expect(C.STEAMSPY_FETCH_SPACING_MS).toBe(1100);
+  });
 });
