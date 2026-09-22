@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getOwnedGames, getPlayerSummary } from './client';
-import { PrivateProfileError } from './types';
+import { PrivateProfileError, ProfileNotFoundError } from './types';
 
 const jsonFetch = (payload: unknown) =>
   vi.fn().mockResolvedValue({ ok: true, json: async () => payload });
@@ -78,10 +78,12 @@ describe('getPlayerSummary', () => {
     });
   });
 
-  it('oyuncu bulunamazsa hata fırlatır', async () => {
+  it('oyuncu bulunamazsa ProfileNotFoundError atar (PrivateProfileError DEĞİL)', async () => {
     const f = jsonFetch({ response: { players: [] } });
     await expect(getPlayerSummary('765', 'k', f as never))
-      .rejects.toBeInstanceOf(PrivateProfileError);
+      .rejects.toBeInstanceOf(ProfileNotFoundError);
+    await expect(getPlayerSummary('765', 'k', f as never))
+      .rejects.not.toBeInstanceOf(PrivateProfileError);
   });
 
   it('API anahtarını sorgu dizesine koyar', async () => {

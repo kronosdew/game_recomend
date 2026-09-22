@@ -1,4 +1,4 @@
-import { OwnedGame, PrivateProfileError } from './types';
+import { OwnedGame, PrivateProfileError, ProfileNotFoundError } from './types';
 
 const API = 'https://api.steampowered.com';
 
@@ -52,7 +52,11 @@ export async function getPlayerSummary(
     };
   };
   const p = json.response?.players?.[0];
-  if (!p) throw new PrivateProfileError('Profil bulunamadı.');
+  if (!p) {
+    throw new ProfileNotFoundError(
+      'Bu SteamID64 ile eşleşen bir profil bulunamadı.',
+    );
+  }
   return {
     personaName: p.personaname,
     avatar: p.avatarfull,

@@ -2,6 +2,7 @@ export class OpenIdVerificationError extends Error {}
 export class PrivateProfileError extends Error {}
 export class VanityNotFoundError extends Error {}
 export class InvalidProfileUrlError extends Error {}
+export class ProfileNotFoundError extends Error {}
 
 export interface OwnedGame {
   appid: number;
