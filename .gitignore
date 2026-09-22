@@ -1,0 +1,12 @@
+
+# superpowers SDD scratch
+.superpowers/
+
+# gizli bilgiler — STEAM_API_KEY burada durur, asla commit edilmez
+.env
+.env.local
+
+# yerel katalog cache'i
+data/*.db
+data/*.db-wal
+data/*.db-shm
