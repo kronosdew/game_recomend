@@ -127,6 +127,14 @@ describe('explainRecommendation', () => {
     const shortMetas = new Map([[1, meta(1, { Metroidvania: 1 })]]);
     const e = explainRecommendation(user, candidate, shortPlayGames, shortMetas);
     expect(e.drivingGames).toEqual([]);
+    // topTags dolu ama drivingGames boşken text bunu görmezden gelip genel
+    // geri dönüşe düşmemeli — kullanıcıya gösterilen etiketlerle metin
+    // birbiriyle çelişmemeli (topTags gösterilirken "genel eğilim" denmemeli).
+    expect(e.topTags.length).toBeGreaterThan(0);
+    expect(e.text).not.toBe('Kütüphanenizdeki genel eğilime göre seçildi.');
+    for (const tag of e.topTags) {
+      expect(e.text).toContain(tag);
+    }
   });
 
   it('MIN_PLAYTIME_MINUTES eşiğinde olan oyunu gerekçe olarak dahil eder (>=)', () => {

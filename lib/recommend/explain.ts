@@ -41,11 +41,19 @@ export function explainRecommendation(
     .slice(0, 2)
     .map((g) => ({ name: g.name, hours: Math.round(g.playtime_forever / 60) }));
 
+  // Üç durum: (1) hem etiket hem kanıt oyun var — tam cümle; (2) etiket var
+  // ama kanıt oyun yok (ör. metaById kaynağı games'i tam kapsamıyor) — oyun
+  // adı/oynama süresi iddia etmeyen, yalnızca etiketi anan bir cümle; (3) hiç
+  // ortak etiket yok — genel geri dönüş. (2), topTags'in text ile tutarsız
+  // kalmaması için var: topTags kullanıcıya gösterilirken text'in "genel
+  // eğilim" demesi, aynı yanıtta çelişkili bilgi vermek olurdu.
   const text =
-    driving.length > 0 && topTags.length > 0
-      ? `${driving.map((g) => `${g.name} (${g.hours} saat)`).join(' ve ')} ` +
-        `oynadınız — ${topTags.join(', ')} ağırlığınız yüksek.`
-      : 'Kütüphanenizdeki genel eğilime göre seçildi.';
+    topTags.length === 0
+      ? 'Kütüphanenizdeki genel eğilime göre seçildi.'
+      : driving.length > 0
+        ? `${driving.map((g) => `${g.name} (${g.hours} saat)`).join(' ve ')} ` +
+          `oynadınız — ${topTags.join(', ')} ağırlığınız yüksek.`
+        : `${topTags.join(', ')} ağırlığınız yüksek olduğu için önerildi.`;
 
   return { topTags, drivingGames: driving, text };
 }
