@@ -56,8 +56,14 @@ export async function refreshCatalog(
     } catch {
       // Tek oyunun hatası tüm tazelemeyi düşürmesin.
       skipped++;
+    } finally {
+      // Her çıkış yolunda (erken `continue`, hata, ya da başarı) en az bir kez
+      // duraklatır. `continue` bir `finally` bloğunu atlamaz — bu, art arda
+      // gelen oyun-olmayan appid'lerde (DLC, soundtrack, henüz çıkmamış)
+      // Store'a duraksız istek dizisi göndermeyi önler, ki oran sınırını
+      // tetikleyen tam olarak budur.
+      await sleep(delayMs);
     }
-    await sleep(delayMs);
   }
   return { added, skipped, totalFound };
 }

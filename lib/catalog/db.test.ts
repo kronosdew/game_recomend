@@ -98,6 +98,21 @@ describe('katalog db', () => {
     const result = getGameMetaByIds(db, [12345]);
     expect(result.size).toBe(0);
   });
+
+  it('getGameMetaByIds: 500\'lük sorgu grubu sınırını aşan istek hepsini döner', () => {
+    const db = openDb(':memory:');
+    const COUNT = 501; // tek bir SQL grubunun (QUERY_CHUNK_SIZE) sınırını aşar
+    for (let i = 1; i <= COUNT; i++) {
+      upsertGameMeta(db, meta({ appid: i, name: `Game ${i}`, tags: new Map([[`T${i}`, 1]]) }));
+    }
+    const ids = Array.from({ length: COUNT }, (_, i) => i + 1);
+    const result = getGameMetaByIds(db, ids);
+    expect(result.size).toBe(COUNT);
+    for (const id of ids) {
+      expect(result.get(id)?.appid).toBe(id);
+      expect(result.get(id)?.name).toBe(`Game ${id}`);
+    }
+  });
 });
 
 describe('openDb — eksik dizin oluşturma (R3)', () => {
