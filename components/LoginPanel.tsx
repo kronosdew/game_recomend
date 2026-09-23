@@ -12,34 +12,53 @@ export function LoginPanel() {
 
   return (
     <div className="flex w-full flex-col gap-6 text-left">
-      <div className="flex items-start gap-3 rounded-lg border p-4 text-sm">
-        <input
-          id={consentId}
-          type="checkbox"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          className="mt-1 h-4 w-4 shrink-0 accent-foreground"
-        />
-        <label htmlFor={consentId}>
-          <Link
-            href="/aydinlatma-metni"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline underline-offset-2"
-          >
-            Aydınlatma metni
-          </Link>
-          {"'ni ve "}
+      <div className="flex flex-col gap-2">
+        {/*
+          Bu kutu RIZA değil, BİLGİLENDİRME onayıdır — sadece aydınlatma
+          metninin okunduğunu doğrular. Faz 1 (profili oku, skorla, göster,
+          unut) hiçbir veri saklamaz; işleme KVKK m.5/2-c (sözleşmenin ifası)
+          temelinde yapılır, bu yüzden açık rıza gerekmez (bkz.
+          lib/consent/versions.ts, ConsentLayer.Ephemeral). Açık rıza Faz
+          2'nin konusudur (saklama/e-posta/analitik). Bu kutuyu yeniden bir
+          "kabul ediyorum" onayına DÖNÜŞTÜRMEYİN ve açık rıza metnini bu
+          kutunun etiketine EKLEMEYİN — iki belge KVKK m.10 ve m.3/1-a
+          altında ayrı yükümlülüklerdir ve tek bir onaya indirgenemez.
+        */}
+        <div className="flex items-start gap-3 rounded-lg border p-4 text-sm">
+          <input
+            id={consentId}
+            type="checkbox"
+            checked={consent}
+            onChange={(e) => setConsent(e.target.checked)}
+            className="mt-1 h-4 w-4 shrink-0 accent-foreground"
+          />
+          <label htmlFor={consentId}>
+            <Link
+              href="/aydinlatma-metni"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline underline-offset-2"
+            >
+              Aydınlatma metni
+            </Link>
+            {"'ni okudum ve anladım."}
+          </label>
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          Faz 1&apos;de hiçbir kişisel veri saklanmaz; bu nedenle bu aşamada
+          rıza istenmez. Saklama, e-posta ya da analitik gibi ek kullanımlar
+          için ileride ayrı ayrı isteneceği{" "}
           <Link
             href="/acik-riza"
             target="_blank"
             rel="noopener noreferrer"
             className="underline underline-offset-2"
           >
-            açık rıza metni
-          </Link>
-          {"'ni okudum, anladım ve kabul ediyorum."}
-        </label>
+            açık rıza metninde
+          </Link>{" "}
+          açıklanıyor.
+        </p>
       </div>
 
       <div className="flex flex-col gap-2">
