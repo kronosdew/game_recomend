@@ -50,6 +50,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
   if (!profile) {
     return (
       <Sayfa>
+        <h1 className="text-2xl font-semibold">Profil seçilmedi</h1>
         <Alert>
           <AlertTitle>Henüz bir profil seçilmedi</AlertTitle>
           <AlertDescription>
@@ -66,6 +67,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
   if (!origin) {
     return (
       <Sayfa>
+        <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
         <Alert variant="destructive">
           <AlertTitle>Sunucu yapılandırması eksik</AlertTitle>
           <AlertDescription>Lütfen daha sonra tekrar deneyin.</AlertDescription>
@@ -102,6 +104,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
     if (data.error === "vanity_not_found") {
       return (
         <Sayfa>
+          <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
           <Alert variant="destructive">
             <AlertTitle>Profil bulunamadı</AlertTitle>
             <AlertDescription>
@@ -116,6 +119,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
     if (data.error === "invalid_url") {
       return (
         <Sayfa>
+          <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
           <Alert variant="destructive">
             <AlertTitle>Adres tanınamadı</AlertTitle>
             <AlertDescription>Adresi kontrol edin.</AlertDescription>
@@ -129,6 +133,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
     // sunucu hatası) — genel özür mesajı gösterilir, dahili ayrıntı sızdırılmaz.
     return (
       <Sayfa>
+        <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
         <Alert variant="destructive">
           <AlertTitle>Bir şeyler ters gitti</AlertTitle>
           <AlertDescription>Lütfen daha sonra tekrar deneyin.</AlertDescription>
@@ -141,6 +146,7 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
   if (data.count === 0) {
     return (
       <Sayfa>
+        <h1 className="text-2xl font-semibold">Öneri bulunamadı</h1>
         <Alert>
           <AlertTitle>Öneri bulunamadı</AlertTitle>
           <AlertDescription>

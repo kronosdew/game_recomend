@@ -81,6 +81,8 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
-* {
-  border-color: var(--color-border, currentColor);
+@layer base {
+  * {
+    border-color: var(--color-border, currentColor);
+  }
 }
