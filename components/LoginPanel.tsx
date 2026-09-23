@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { oneriIste } from "@/app/actions";
 
 export function LoginPanel() {
   const [consent, setConsent] = useState(false);
@@ -87,7 +88,14 @@ export function LoginPanel() {
         <span className="h-px flex-1 bg-border" />
       </div>
 
-      <form action="/oneriler" method="get" className="flex flex-col gap-2">
+      {/*
+        I8: bu form eskiden `method="get"` idi ve profil adresini
+        `/oneriler?profile=...` olarak URL'ye yazıyordu — sunucu erişim
+        kayıtlarına, tarayıcı geçmişine ve Referer başlığına düşüyordu.
+        Server Action POST üzerinden çalışır; adres artık istek gövdesinde
+        taşınır ve hiçbir URL'ye yazılmaz.
+      */}
+      <form action={oneriIste} className="flex flex-col gap-2">
         <label htmlFor={profileInputId} className="text-sm font-medium text-muted-foreground">
           Profil linkini yapıştır (deneme modu)
         </label>
@@ -104,8 +112,10 @@ export function LoginPanel() {
           </Button>
         </div>
         <p className="text-xs text-muted-foreground">
-          Link ile deneme modunda hiçbir veri kaydedilmez. Başkasının profilini
-          girerseniz o kişi bu işleme onay vermemiş olur — kendi profilinizi girin.
+          Link ile deneme modunda hiçbir veri kaydedilmez. Adres yalnızca
+          tarayıcınızda, 10 dakika ömürlü bir oturum çerezinde tutulur.
+          Başkasının profilini girerseniz o kişi bu işleme onay vermemiş
+          olur — kendi profilinizi girin.
         </p>
       </form>
     </div>

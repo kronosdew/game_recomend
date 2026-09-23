@@ -3,6 +3,12 @@ export class PrivateProfileError extends Error {}
 export class VanityNotFoundError extends Error {}
 export class InvalidProfileUrlError extends Error {}
 export class ProfileNotFoundError extends Error {}
+/**
+ * Dış bir servis (Steam / SteamSpy) ayrılan süre içinde yanıt vermedi.
+ * Genel bir sunucu hatası DEĞİLDİR: kullanıcıya "daha sonra tekrar deneyin"
+ * denebilecek, geçici ve yeniden denenebilir bir durumdur.
+ */
+export class UpstreamTimeoutError extends Error {}
 
 export interface OwnedGame {
   appid: number;

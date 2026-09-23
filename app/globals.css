@@ -78,7 +78,14 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  /*
+    app/layout.tsx Geist'i yükleyip --font-geist-sans'ı <html> üzerine
+    koyuyor; burada sabit "Arial" yazmak onu geçersiz kılıyordu — yani
+    next/font ile yüklenen font indiriliyor ama hiç kullanılmıyordu.
+    Geist birincil, sistem fontları yalnızca yedek.
+  */
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Arial, Helvetica, sans-serif;
 }
 
 @layer base {

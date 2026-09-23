@@ -9,6 +9,27 @@ function add(v: TagVector, tag: string, amount: number): void {
   v.set(tag, (v.get(tag) ?? 0) + amount);
 }
 
+/**
+ * Spec §6.6'daki "terk edilmiş oyun" tanımı: bir yıldan uzun süredir
+ * dokunulmamış ve ABANDONED_MINUTES'tan az oynanmış oyun.
+ *
+ * Bu yüklem BİLEREK dışa açıktır. Negatif sinyal, ancak o oyunun etiket
+ * meta verisi de çekilmişse çalışabilir; meta verisini seçen kod
+ * (lib/catalog/owned-games-meta.ts) ile burada kullanılan tanım ayrı ayrı
+ * yazılırsa ikisi sessizce ayrışır — I1'de tam olarak bu oldu: meta seçimi
+ * yalnızca `>= 60 dk` oynanmış oyunları alıyordu, negatif sinyal ise
+ * `< 30 dk` oynanmışları arıyordu; iki küme ayrıktı ve §6.6 hiç
+ * tetiklenmiyordu. Tek tanım, tek kaynak.
+ */
+export function isAbandoned(g: OwnedGame, nowSeconds: number): boolean {
+  return (
+    g.playtime_forever < ABANDONED_MINUTES &&
+    typeof g.rtime_last_played === 'number' &&
+    g.rtime_last_played > 0 &&
+    nowSeconds - g.rtime_last_played > ABANDONED_AFTER_SECONDS
+  );
+}
+
 export function buildUserVector(
   games: OwnedGame[],
   metaById: Map<number, GameMeta>,
@@ -22,13 +43,7 @@ export function buildUserVector(
 
     // Terk edilmiş oyun kontrolü, 60 dakikalık eşikten ÖNCE çalışmalı;
     // aksi halde bu oyunlar atlanır ve negatif sinyalleri hiç katkı vermez.
-    const abandoned =
-      g.playtime_forever < ABANDONED_MINUTES &&
-      typeof g.rtime_last_played === 'number' &&
-      g.rtime_last_played > 0 &&
-      nowSeconds - g.rtime_last_played > ABANDONED_AFTER_SECONDS;
-
-    if (abandoned) {
+    if (isAbandoned(g, nowSeconds)) {
       for (const [tag, tw] of meta.tags) add(vec, tag, -NEGATIVE_WEIGHT * tw);
       continue;
     }

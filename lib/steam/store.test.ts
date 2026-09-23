@@ -76,3 +76,34 @@ describe('fetchNewReleaseAppIds', () => {
     expect(ids).toEqual([]);
   });
 });
+
+describe('parseReleaseDate — çıpa ve takvim doğrulaması', () => {
+  it('tam ay adını da kabul eder', () => {
+    expect(parseReleaseDate('12 September, 2026')).toBe('2026-09-12');
+  });
+
+  it('virgülsüz biçimi kabul eder', () => {
+    expect(parseReleaseDate('3 Mar 2026')).toBe('2026-03-03');
+  });
+
+  it('uydurma ay adını reddeder (ilk üç harf tutması yetmez)', () => {
+    expect(parseReleaseDate('12 Janx, 2026')).toBeNull();
+    expect(parseReleaseDate('12 Septemberrr, 2026')).toBeNull();
+  });
+
+  it('gömülü tarih taşıyan serbest metni reddeder (kalıp baştan sona çıpalı)', () => {
+    expect(parseReleaseDate('Erken erişim: 12 Sep, 2026 civarı')).toBeNull();
+    expect(parseReleaseDate('12 Sep, 2026 (tahmini)')).toBeNull();
+    expect(parseReleaseDate('yaklaşık 12 Sep, 2026')).toBeNull();
+  });
+
+  it('takvimde var olmayan günü reddeder', () => {
+    expect(parseReleaseDate('31 Feb, 2026')).toBeNull();
+    expect(parseReleaseDate('31 Apr, 2026')).toBeNull();
+  });
+
+  it('artık yıl 29 Şubat’ı kabul eder, artık olmayan yılda reddeder', () => {
+    expect(parseReleaseDate('29 Feb, 2024')).toBe('2024-02-29');
+    expect(parseReleaseDate('29 Feb, 2026')).toBeNull();
+  });
+});

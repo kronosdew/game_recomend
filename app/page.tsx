@@ -3,6 +3,7 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 
 const HATA_MESAJLARI: Record<string, string> = {
   giris: "Steam girişi doğrulanamadı. Lütfen tekrar deneyin.",
+  adres: "Girdiğiniz adres bir Steam profil adresine benzemiyor. Örnek: https://steamcommunity.com/id/kullaniciadi",
   bilinmeyen: "Beklenmeyen bir hata oluştu. Lütfen tekrar deneyin.",
 };
 
@@ -24,7 +25,9 @@ export default async function Home({ searchParams }: PageProps<"/">) {
 
         {hataMesaji && (
           <Alert variant="destructive" className="w-full">
-            <AlertTitle>Giriş başarısız</AlertTitle>
+            <AlertTitle>
+              {hataParam === "adres" ? "Adres tanınamadı" : "Giriş başarısız"}
+            </AlertTitle>
             <AlertDescription>{hataMesaji}</AlertDescription>
           </Alert>
         )}

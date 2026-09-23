@@ -44,6 +44,12 @@ Sahiplik kanıtlanmadığı için bu mod **tamamen stateless**: hiçbir kişisel
 kaydedilmez, oturum açılmaz, sonuç ekranda gösterilip atılır. Saklama gerektiren
 hiçbir özellik (geçmiş, "bir daha gösterme", bildirim) bu modda sunulmaz.
 
+Girilen adres **sunucuda hiçbir yere yazılmaz ve URL'de taşınmaz**: form POST
+eder ve adres yalnızca kullanıcının kendi tarayıcısında, 10 dakika ömürlü
+httpOnly bir çerezde durur. GET query'de taşımak onu sunucu erişim kayıtlarına,
+tarayıcı geçmişine ve `Referer` başlığına düşürürdü — bu, yukarıdaki "hiçbir
+kişisel veri kaydedilmez" taahhüdünü çürütürdü.
+
 Desteklenen biçimler:
 - `https://steamcommunity.com/profiles/<steamid64>`
 - `https://steamcommunity.com/id/<vanity>` → `ISteamUser/ResolveVanityURL/v1`
@@ -110,6 +116,15 @@ Oyun detayları gizliyse `GetOwnedGames` **hata vermez**, boş obje döner:
 akışın parçasıdır. Kullanıcıya Steam > Profil > Gizlilik Ayarları > Oyun
 detayları → "Herkese Açık" yolu ekran görüntülü anlatılır.
 
+**Aynı yanıt VAR OLMAYAN bir oyuncu için de döner.** Yani boş `{"response":{}}`
+tek başına "gizli profil" demek DEĞİLDİR. Kullanıcı ham bir SteamID64
+yapıştırdıysa (vanity yolunda `ResolveVanityURL` varlığı zaten kanıtlar),
+`GetPlayerSummaries` ile hesabın var olup olmadığı doğrulanır ve ayrım yapılır;
+aksi hâlde hiç var olmayan bir hesap için "gizlilik ayarlarını değiştirin"
+talimatı gösterilir. `GetPlayerSummaries` persona ve avatar döndürdüğü için bu
+çağrının yanıtı hiçbir yere yazılmaz, gösterilmez ve aydınlatma metninde
+açıkça anlatılır (bkz. §4.1).
+
 ### 5.2 Neden SteamSpy
 
 Steam türleri çok kaba ("Action, Indie, RPG"). Zevk eşleştirmesini yapan şey
@@ -166,6 +181,23 @@ final   = base * recency / log1p(sahipSayısı)        ← popülerlik sönümle
 mmr(i) = λ * skor(i) - (1-λ) * max(cosine(i, seçilenler))
 λ = 0.7, k = 20
 ```
+
+**MMR, §6.3 skorlarının [0,1]'e normalize edilmiş hâli üzerinde çalışır**
+(aday kümesindeki en yüksek skora bölünerek). Zorunludur: §6.3'ün popülerlik
+sönümlemesi (`/ log1p(sahipSayısı)`) skoru gerçekçi sahip sayılarında
+~[0, 0.12] aralığına sıkıştırır, formüldeki `cosine` terimi ise ham olarak
+[0, 1] aralığındadır. Aynı λ altında birleştirildiklerinde çeşitlilik cezası
+erişilebilir alaka tavanının birkaç katına çıkar (0.27'ye karşı 0.085) ve MMR
+alakayı değil alakasızlığı optimize etmeye başlar: ilk sıra doğru kalır
+(seçilenler boş olduğu için ceza yoktur), sonraki sıralar gürültü olur.
+Normalize skor YALNIZCA sıralama içindir; kullanıcıya/API'ye dönen `score`
+alanı §6.3'ün skorudur.
+
+**Alaka tabanı:** skoru `<= 0` olan aday MMR'a hiç girmez. Skoru sıfır olan
+aday kullanıcının zevkiyle hiç kesişmiyor, negatif olan (bkz. §6.6) ters
+düşüyor demektir; ikisi de öneri değildir. Bu nedenle liste k'dan kısa
+olabilir ve boş dönebilir — "sana uyan bir şey bulamadık" dürüst bir yanıttır,
+k tane rastgele oyun değildir.
 
 ### 6.5 Gerekçe — zorunlu
 

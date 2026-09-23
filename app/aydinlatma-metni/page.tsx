@@ -80,9 +80,31 @@ export default function AydinlatmaMetniPage() {
             </li>
           </ul>
           <p>
-            Uygulama görünen adınızı (persona name), avatarınızı veya
-            arkadaş listenizi <strong>talep etmez ve işlemez</strong> — bkz.
-            madde 6.
+            Uygulama arkadaş listenizi <strong>hiçbir şekilde talep etmez ve
+            işlemez</strong> — bkz. madde 6.
+          </p>
+          <p>
+            <strong>Profil varlık kontrolü.</strong> Adres yerine doğrudan bir
+            SteamID64 girdiğinizde, numaranın gerçekten bir Steam hesabına ait
+            olup olmadığı Steam&apos;in{" "}
+            <code className="rounded bg-muted px-1">GetPlayerSummaries</code>{" "}
+            servisine sorularak doğrulanır. Bu kontrol olmadan, var olmayan bir
+            numara için size &quot;profiliniz gizli, gizlilik ayarlarınızı
+            değiştirin&quot; denirdi; çünkü Steam her iki durumda da aynı boş
+            yanıtı veriyor.
+          </p>
+          <p>
+            Bu servisin yanıtı <strong>görünen adınızı (persona name) ve avatar
+            adresinizi de içerir</strong>. Bu verileri talep etmiyoruz ancak
+            yanıtın içinde bize ulaşıyorlar; KVKK anlamında bir veriyi elde
+            etmek de işlemedir, bu yüzden burada açıkça belirtiyoruz. Bu
+            veriler <strong>okunmaz, kullanılmaz, hiçbir yere kaydedilmez,
+            günlük (log) kayıtlarına yazılmaz ve size veya başkasına
+            gösterilmez</strong>; yanıttan yalnızca &quot;böyle bir hesap var
+            mı&quot; bilgisi alınır ve gerisi işlem biter bitmez bellekten
+            düşer. Profil adresi (özel adres) girdiğinizde bu kontrol{" "}
+            <strong>hiç yapılmaz</strong>: adresin çözümlenmiş olması hesabın
+            varlığını zaten kanıtlar.
           </p>
           <p>
             Ayrıca uygulama, herkese açık Steam oyun kataloğundan (uygulama
@@ -134,13 +156,26 @@ export default function AydinlatmaMetniPage() {
             hiçbir kaydı veritabanına yazılmaz.
           </p>
           <p>
-            Tek istisna: Steam ile giriş yaptığınızda, oturumunuzu tutmak
-            için SteamID64&apos;ünüzü içeren, tarayıcı tarafından
-            okunamayan (httpOnly) bir oturum çerezi <strong>8 saat</strong>{" "}
-            süreyle tarayıcınızda tutulur. Bu çerez yalnızca talep ettiğiniz
-            girişi sağlamak için zorunludur ve süresi dolduğunda kendiliğinden
-            geçersiz olur.
+            İstisna, yalnızca <strong>kendi tarayıcınızda</strong> tutulan ve
+            tarayıcı tarafından okunamayan (httpOnly) iki çerezdir. İkisi de
+            sunucuda saklanmaz, üçüncü kişiye gönderilmez ve süresi dolduğunda
+            kendiliğinden geçersiz olur:
           </p>
+          <ul className="list-disc space-y-1 pl-5">
+            <li>
+              Steam ile giriş yaptığınızda, oturumunuzu tutmak için
+              SteamID64&apos;ünüzü içeren bir oturum çerezi{" "}
+              <strong>8 saat</strong> süreyle tutulur.
+            </li>
+            <li>
+              Profil linki yapıştırma (deneme) modunda, girdiğiniz adres{" "}
+              <strong>10 dakika</strong> süreyle bir çerezde tutulur. Adres
+              bilerek adres çubuğuna yazılmaz: aksi hâlde sunucu erişim
+              kayıtlarına, tarayıcı geçmişinize ve dış bağlantılara
+              gönderilen <code className="rounded bg-muted px-1">Referer</code>{" "}
+              başlığına düşerdi.
+            </li>
+          </ul>
         </Bolum>
 
         <Bolum baslik="6. Arkadaş Listesi İşlenmez">

@@ -1,3 +1,6 @@
+import { fetchWithTimeout } from '@/lib/http/fetch';
+import { STEAMSPY_TIMEOUT_MS } from '@/lib/http/constants';
+
 const BASE = 'https://steamspy.com/api.php';
 
 export function normalizeTags(raw: Record<string, number>): Map<string, number> {
@@ -22,7 +25,9 @@ export async function fetchSteamSpyTags(
   appid: number,
   fetchImpl: typeof fetch = fetch,
 ): Promise<{ tags: Map<string, number>; positive: number; negative: number; owners: number }> {
-  const res = await fetchImpl(`${BASE}?request=appdetails&appid=${appid}`);
+  const res = await fetchWithTimeout(
+    fetchImpl, `${BASE}?request=appdetails&appid=${appid}`, STEAMSPY_TIMEOUT_MS,
+  );
   if (!res.ok) throw new Error(`SteamSpy ${appid}: HTTP ${res.status}`);
   const j = (await res.json()) as {
     tags?: Record<string, number> | never[];

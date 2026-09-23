@@ -1,4 +1,6 @@
 import { OwnedGame, PrivateProfileError, ProfileNotFoundError } from './types';
+import { fetchWithTimeout } from '@/lib/http/fetch';
+import { STEAM_API_TIMEOUT_MS } from '@/lib/http/constants';
 
 const API = 'https://api.steampowered.com';
 
@@ -12,7 +14,7 @@ export async function getOwnedGames(
     `&steamid=${encodeURIComponent(steamId)}` +
     `&include_appinfo=1&include_played_free_games=1&format=json`;
 
-  const res = await fetchImpl(url);
+  const res = await fetchWithTimeout(fetchImpl, url, STEAM_API_TIMEOUT_MS);
   if (!res.ok) {
     throw new Error('Steam API isteği başarısız oldu.');
   }
@@ -38,7 +40,7 @@ export async function getPlayerSummary(
   const url =
     `${API}/ISteamUser/GetPlayerSummaries/v2/?key=${encodeURIComponent(apiKey)}` +
     `&steamids=${encodeURIComponent(steamId)}`;
-  const res = await fetchImpl(url);
+  const res = await fetchWithTimeout(fetchImpl, url, STEAM_API_TIMEOUT_MS);
   if (!res.ok) {
     throw new Error('Steam API isteği başarısız oldu.');
   }

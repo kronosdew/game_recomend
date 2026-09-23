@@ -1,67 +1,41 @@
 import { NextResponse } from 'next/server';
-import { openDb, getCandidatePool } from '@/lib/catalog/db';
-import { loadOwnedGamesMeta } from '@/lib/catalog/owned-games-meta';
-import { getOwnedGames } from '@/lib/steam/client';
-import { resolveToSteamId64 } from '@/lib/steam/profile-url';
-import { recommend } from '@/lib/recommend/pipeline';
-import {
-  PrivateProfileError, VanityNotFoundError, InvalidProfileUrlError,
-} from '@/lib/steam/types';
+import { cookies } from 'next/headers';
+import { produceRecommendations, recommendErrorCode } from '@/lib/server/recommendations';
+import { logError } from '@/lib/log';
+import { STEAM_ID_COOKIE } from '@/lib/cookies';
 
 export const runtime = 'nodejs';
 
 export async function POST(req: Request) {
-  const apiKey = process.env.STEAM_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json({ error: 'Sunucu yapılandırması eksik.' }, { status: 500 });
-  }
-
   let body: { profile?: string };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: 'Geçersiz istek.' }, { status: 400 });
   }
-  if (!body.profile) {
+
+  // R27 (I6'nın ucuz kısmı): doğrulanmış bir oturum çerezi varsa gövdedeki
+  // `profile` alanı YOK SAYILIR. Girişli kullanıcı adına başka bir profilin
+  // sorgulanmasının bir anlamı yok; sahipliği kanıtlanmış kimlik önceliklidir.
+  // (Kimliksiz/limitsiz erişimin geri kalanı — hız sınırlama — bu turun
+  // kapsamı dışında bırakıldı: altyapı kararı gerektiriyor.)
+  const steamId = (await cookies()).get(STEAM_ID_COOKIE)?.value;
+  const profile = steamId ?? body.profile;
+
+  if (!profile) {
     return NextResponse.json({ error: 'Profil adresi gerekli.' }, { status: 400 });
   }
 
   try {
-    const steamId = await resolveToSteamId64(body.profile, apiKey);
-    const games = await getOwnedGames(steamId, apiKey);
-
-    // R4: en çok oynanan (en fazla OWNED_GAMES_META_CAP) oyunun meta verisi
-    // önce katalog önbelleğinden, yalnızca eksikler için SteamSpy'dan
-    // (istekler arası boşluk bırakılarak) yüklenir. Bkz. lib/catalog/owned-games-meta.ts.
-    const db = openDb();
-    const metaById = await loadOwnedGamesMeta(db, games);
-
-    const pool = getCandidatePool(db, new Date());
-    const results = recommend({ games, metaById, pool, now: new Date() });
-
-    // Katman 0: hiçbir kişisel veri kaydedilmez. Yanıt üretilir ve unutulur;
-    // yalnızca yazılan şey (loadOwnedGamesMeta içinde) kamuya açık katalogdur.
-    return NextResponse.json({
-      count: results.length,
-      recommendations: results.map((r) => ({
-        appid: r.meta.appid,
-        name: r.meta.name,
-        score: Number(r.score.toFixed(4)),
-        releaseDate: r.meta.releaseDate,
-        reason: r.explanation.text,
-        tags: r.explanation.topTags,
-      })),
-    });
+    // Katman 0: hiçbir kişisel veri kaydedilmez. Yanıt üretilir ve unutulur.
+    return NextResponse.json(await produceRecommendations(profile));
   } catch (e) {
-    if (e instanceof PrivateProfileError) {
-      return NextResponse.json({ error: 'private_profile' }, { status: 409 });
+    const { code, status } = recommendErrorCode(e);
+    // Beklenen taksonomi dışı hatalar sessizce yutulmaz (I10). Kayda yalnızca
+    // hata türü düşer; profil adresi, SteamID64 ve API anahtarı ASLA.
+    if (code === 'unknown' || code === 'config_missing') {
+      logError('api.recommend', e, { code });
     }
-    if (e instanceof VanityNotFoundError) {
-      return NextResponse.json({ error: 'vanity_not_found' }, { status: 404 });
-    }
-    if (e instanceof InvalidProfileUrlError) {
-      return NextResponse.json({ error: 'invalid_url' }, { status: 400 });
-    }
-    return NextResponse.json({ error: 'unknown' }, { status: 500 });
+    return NextResponse.json({ error: code }, { status });
   }
 }

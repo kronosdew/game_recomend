@@ -22,7 +22,11 @@
  * kaldırıp yalnızca `granted: true` bakmak, kullanıcının hiç görmediği bir
  * metne rıza göstermiş gibi kaydedilmesi demektir — YAPMAYIN.
  */
-export const PRIVACY_NOTICE_VERSION = 1; // aydınlatma metni (KVKK m.10)
+// Sürüm 2 (2026-09-23): profil varlık kontrolü sırasında GetPlayerSummaries
+// yanıtının persona adı ve avatar adresi taşıdığı, bunların okunmadığı /
+// saklanmadığı / gösterilmediği §2'ye eklendi; deneme modunun çerezi §5'e
+// eklendi.
+export const PRIVACY_NOTICE_VERSION = 2; // aydınlatma metni (KVKK m.10)
 export const CONSENT_TEXT_VERSION = 1; // açık rıza metni (KVKK m.3/1-a)
 
 /**

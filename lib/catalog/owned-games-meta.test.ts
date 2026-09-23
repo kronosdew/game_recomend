@@ -1,8 +1,14 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { openDb, getGameMetaByIds, upsertGameMeta } from './db';
-import { selectRelevantOwnedGames, loadOwnedGamesMeta } from './owned-games-meta';
+import {
+  selectRelevantOwnedGames, selectAbandonedOwnedGames, loadOwnedGamesMeta,
+} from './owned-games-meta';
+import { recommend } from '@/lib/recommend/pipeline';
+import { l2Normalize } from '@/lib/recommend/vector';
 import type { GameMeta, OwnedGame } from '@/lib/steam/types';
-import { MIN_PLAYTIME_MINUTES, OWNED_GAMES_META_CAP } from '@/lib/recommend/constants';
+import {
+  MIN_PLAYTIME_MINUTES, OWNED_GAMES_META_CAP, ABANDONED_META_CAP,
+} from '@/lib/recommend/constants';
 
 function game(over: Partial<OwnedGame> = {}): OwnedGame {
   return { appid: 1, name: 'G', playtime_forever: 600, ...over };
@@ -162,5 +168,97 @@ describe('loadOwnedGamesMeta', () => {
     );
 
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+});
+
+// --- I1: negatif sinyalin (spec §6.6) gerçekten etki etmesi ----------------
+// Bu bölüm İKİ modülün DİKİŞİNİ test eder. Her parça tek başına doğruydu:
+// selectRelevantOwnedGames R4 capini doğru uyguluyordu, buildUserVector
+// negatif ağırlığı doğru hesaplıyordu. Ama biri `>= 60 dk`, diğeri `< 30 dk`
+// oyunlara bakıyordu; iki küme ayrıktı ve §6.6 hiç tetiklenmiyordu.
+describe('selectAbandonedOwnedGames (I1)', () => {
+  const NOW_S = Math.floor(new Date('2026-09-22T00:00:00Z').getTime() / 1000);
+  const YIL = 365 * 24 * 3600;
+
+  it('terk edilmiş oyunu seçer — 60 dk capi bu kümeyi dışlıyordu', () => {
+    const games = [
+      game({ appid: 1, playtime_forever: 10, rtime_last_played: NOW_S - 2 * YIL }),
+    ];
+    expect(selectAbandonedOwnedGames(games, NOW_S).map((g) => g.appid)).toEqual([1]);
+  });
+
+  it('yeni oynanmış kısa oyunu seçmez (terk edilmiş değil, sadece yeni)', () => {
+    const games = [
+      game({ appid: 2, playtime_forever: 10, rtime_last_played: NOW_S - 3600 }),
+    ];
+    expect(selectAbandonedOwnedGames(games, NOW_S)).toEqual([]);
+  });
+
+  it('çok oynanmış oyunu seçmez (bu pozitif sinyaldir)', () => {
+    const games = [
+      game({ appid: 3, playtime_forever: 6000, rtime_last_played: NOW_S - 2 * YIL }),
+    ];
+    expect(selectAbandonedOwnedGames(games, NOW_S)).toEqual([]);
+  });
+
+  it(`en eskiden başlayarak en fazla ${ABANDONED_META_CAP} oyun seçer`, () => {
+    const games = Array.from({ length: ABANDONED_META_CAP + 3 }, (_, i) =>
+      game({ appid: i + 1, playtime_forever: 5, rtime_last_played: NOW_S - (10 - i * 0.1) * YIL }));
+    const out = selectAbandonedOwnedGames(games, NOW_S);
+    expect(out).toHaveLength(ABANDONED_META_CAP);
+    // En eski dokunulan (appid 1) mutlaka içeride, en yenisi dışarıda olmalı.
+    expect(out.map((g) => g.appid)).toContain(1);
+    expect(out.map((g) => g.appid)).not.toContain(ABANDONED_META_CAP + 3);
+  });
+});
+
+describe('negatif sinyal uçtan uca etki eder (I1)', () => {
+  const NOW = new Date('2026-09-22T00:00:00Z');
+  const NOW_S = Math.floor(NOW.getTime() / 1000);
+  const YIL = 365 * 24 * 3600;
+
+  const games: OwnedGame[] = [
+    { appid: 100, name: 'Hollow Knight', playtime_forever: 7200 },
+    // Bir yıldan uzun süredir dokunulmamış, 10 dk oynanmış: §6.6 adayı.
+    { appid: 200, name: 'Terk Edilmiş Futbol', playtime_forever: 10,
+      rtime_last_played: NOW_S - 2 * YIL },
+  ];
+
+  function hazirla() {
+    const db = openDb(':memory:');
+    upsertGameMeta(db, meta({ appid: 100, name: 'Hollow Knight', tags: new Map([['Metroidvania', 1]]) }));
+    upsertGameMeta(db, meta({ appid: 200, name: 'Futbol', tags: new Map([['Futbol', 1]]) }));
+    return db;
+  }
+
+  it('terk edilmiş oyunun meta verisi de yüklenir', async () => {
+    const db = hazirla();
+    const metaById = await loadOwnedGamesMeta(db, games, undefined, NOW_S);
+    expect(metaById.has(200)).toBe(true);
+  });
+
+  // İki aday BİLEREK simetriktir: aynı Metroidvania ağırlığı, aynı yapı.
+  // Tek fark, birinin ikinci etiketinin kullanıcının TERK ETTİĞİ tür olması.
+  // Negatif sinyal çalışmıyorsa iki skor BİRE BİR EŞİT olur (kullanıcı
+  // vektöründe "Futbol" hiç bulunmaz) ve sıralama havuz sırasına düşer;
+  // yani bu test "meta veri yüklendi mi" değil, "negatif ağırlık SKORA
+  // GERÇEKTEN ETKİ ETTİ Mİ" sorusunu ölçer.
+  const TERK_EDILMIS_TURDE = 300;
+  const NOTR = 400;
+  const pool = [
+    { meta: meta({ appid: TERK_EDILMIS_TURDE, name: 'Yeni Futbol',
+        tags: new Map([['Futbol', 1], ['Metroidvania', 0.3]]) }),
+      vector: l2Normalize(new Map([['Futbol', 1], ['Metroidvania', 0.3]])) },
+    { meta: meta({ appid: NOTR, name: 'Yeni Bulmaca',
+        tags: new Map([['Bulmaca', 1], ['Metroidvania', 0.3]]) }),
+      vector: l2Normalize(new Map([['Bulmaca', 1], ['Metroidvania', 0.3]])) },
+  ];
+
+  it('terk edilmiş türdeki aday, simetrik nötr adayın ARKASINA düşer', async () => {
+    const db = hazirla();
+    const metaById = await loadOwnedGamesMeta(db, games, undefined, NOW_S);
+    const out = recommend({ games, metaById, pool, now: NOW });
+    expect(out.map((r) => r.meta.appid)).toEqual([NOTR, TERK_EDILMIS_TURDE]);
+    expect(out[1].score).toBeLessThan(out[0].score);
   });
 });

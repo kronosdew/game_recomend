@@ -1,4 +1,6 @@
 import { InvalidProfileUrlError, VanityNotFoundError } from './types';
+import { fetchWithTimeout } from '@/lib/http/fetch';
+import { STEAM_API_TIMEOUT_MS } from '@/lib/http/constants';
 
 const API = 'https://api.steampowered.com';
 const ID64_RE = /^7656119\d{10}$/;
@@ -35,18 +37,36 @@ export function parseProfileUrl(input: string): ParsedProfile {
   throw new InvalidProfileUrlError('Profil adresi tanınamadı.');
 }
 
-export async function resolveToSteamId64(
+export interface ResolvedProfile {
+  steamId: string;
+  /**
+   * SteamID64'ün nereden geldiği. Bu ayrım R26 için ZORUNLUDUR:
+   *
+   * - `vanity`: `ResolveVanityURL` başarılı döndüyse profil VARDIR
+   *   (bulunmayan özel adres için Steam `success: 42` verir). Varlığı
+   *   ayrıca doğrulamak gereksiz bir ağ turu olur.
+   * - `id64`: kullanıcı ham bir sayı yapıştırdı; hiçbir şey doğrulanmadı.
+   *   Steam, VAR OLMAYAN bir oyuncu için de `GetOwnedGames`'te boş
+   *   `{"response":{}}` döndürür — yani "gizli profil" ile "böyle bir hesap
+   *   yok" aynı yanıta çıkar. Bu durumda kullanıcıya var olmayan bir hesap
+   *   için "gizlilik ayarlarını değiştir" demek YANLIŞTIR; çağıran, varlığı
+   *   `getPlayerSummary` ile ayırt etmelidir.
+   */
+  kind: ParsedProfile['kind'];
+}
+
+export async function resolveProfile(
   input: string,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
-): Promise<string> {
+): Promise<ResolvedProfile> {
   const parsed = parseProfileUrl(input);
-  if (parsed.kind === 'id64') return parsed.id;
+  if (parsed.kind === 'id64') return { steamId: parsed.id, kind: 'id64' };
 
   const url =
     `${API}/ISteamUser/ResolveVanityURL/v1/` +
     `?key=${encodeURIComponent(apiKey)}&vanityurl=${encodeURIComponent(parsed.vanity)}`;
-  const res = await fetchImpl(url);
+  const res = await fetchWithTimeout(fetchImpl, url, STEAM_API_TIMEOUT_MS);
   if (!res.ok) {
     throw new Error('Steam API isteği başarısız oldu.');
   }
@@ -58,5 +78,14 @@ export async function resolveToSteamId64(
   if (json.response?.success !== 1 || !json.response.steamid) {
     throw new VanityNotFoundError('Bu özel adrese sahip bir profil bulunamadı.');
   }
-  return json.response.steamid;
+  return { steamId: json.response.steamid, kind: 'vanity' };
+}
+
+/** Yalnızca SteamID64'e ihtiyaç duyan çağıranlar için ince sarmalayıcı. */
+export async function resolveToSteamId64(
+  input: string,
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  return (await resolveProfile(input, apiKey, fetchImpl)).steamId;
 }

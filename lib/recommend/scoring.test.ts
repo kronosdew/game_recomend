@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { passesQualityGate, scoreCandidates, daysSince } from './scoring';
 import { l2Normalize } from './vector';
 import type { GameMeta } from '@/lib/steam/types';
+import {
+  MIN_REVIEWS, MIN_POSITIVE_RATIO, RELEASE_WINDOW_DAYS,
+} from './constants';
 
 const NOW = new Date('2026-09-22T00:00:00Z');
 
@@ -34,6 +37,32 @@ describe('passesQualityGate', () => {
   });
   it('gelecek tarihliyi eler', () => {
     expect(passesQualityGate(meta({ releaseDate: '2027-01-01' }), NOW)).toBe(false);
+  });
+
+  // --- Sınır testleri: eşiğin TAM ÜSTÜ dahildir --------------------------
+  // "49 eleniyor" testi, eşik 51'e kayarsa da geçer; kapının nerede
+  // durduğunu yalnızca eşiğin kendisi pinler.
+  it(`tam ${MIN_REVIEWS} inceleme GEÇER (eşik dahil)`, () => {
+    expect(passesQualityGate(meta({ reviewCount: MIN_REVIEWS }), NOW)).toBe(true);
+  });
+
+  it(`tam %${MIN_POSITIVE_RATIO * 100} pozitif oran GEÇER (eşik dahil)`, () => {
+    expect(passesQualityGate(meta({ positiveRatio: MIN_POSITIVE_RATIO }), NOW)).toBe(true);
+  });
+
+  it(`tam ${RELEASE_WINDOW_DAYS} günlük oyun GEÇER (pencere dahil)`, () => {
+    // 2026-09-22 eksi 90 gün = 2026-06-24
+    expect(daysSince('2026-06-24', NOW)).toBe(RELEASE_WINDOW_DAYS);
+    expect(passesQualityGate(meta({ releaseDate: '2026-06-24' }), NOW)).toBe(true);
+  });
+
+  it(`${RELEASE_WINDOW_DAYS + 1} günlük oyun ELENİR (pencerenin hemen dışı)`, () => {
+    expect(daysSince('2026-06-23', NOW)).toBe(RELEASE_WINDOW_DAYS + 1);
+    expect(passesQualityGate(meta({ releaseDate: '2026-06-23' }), NOW)).toBe(false);
+  });
+
+  it('bugün çıkan oyun GEÇER (0 gün, alt sınır dahil)', () => {
+    expect(passesQualityGate(meta({ releaseDate: '2026-09-22' }), NOW)).toBe(true);
   });
 });
 

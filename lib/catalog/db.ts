@@ -25,15 +25,36 @@ CREATE TABLE IF NOT EXISTS game_meta (
 CREATE INDEX IF NOT EXISTS idx_release ON game_meta(release_date);
 `;
 
-export function openDb(dbPath = 'data/catalog.db'): Db {
-  // ':memory:' bir dosya sistemi yolu değildir — dizin oluşturma denemesi yapılmaz.
-  if (dbPath !== ':memory:') {
-    const dir = path.dirname(dbPath);
-    fs.mkdirSync(dir, { recursive: true });
+export const DEFAULT_DB_PATH = 'data/catalog.db';
+
+/**
+ * Dosya tabanlı bağlantılar için modül düzeyinde havuz.
+ *
+ * Neden: `openDb` her istekte yeni bir `better-sqlite3` bağlantısı açıyordu
+ * ve hiçbir yerde kapatılmıyordu — her öneri isteği bir dosya tanıtıcısı
+ * sızdırıyordu. SQLite eşzamanlı okuyucuları zaten tek bağlantı üzerinden
+ * güvenle karşılar; süreç ömrü boyunca tek bağlantı doğru modeldir.
+ *
+ * ':memory:' BİLEREK havuzlanmaz: bellek içi veritabanı bağlantıya özeldir
+ * ve testler her çağrıdan İZOLE bir veritabanı bekler. Havuzlansaydı
+ * testler birbirinin satırlarını görürdü.
+ */
+const pool = new Map<string, Db>();
+
+export function openDb(dbPath = DEFAULT_DB_PATH): Db {
+  const shared = dbPath !== ':memory:';
+  if (shared) {
+    const cached = pool.get(dbPath);
+    // `db.open`, dışarıdan kapatılmış bir bağlantıyı yeniden açmamızı sağlar
+    // (ör. kendi bağlantısını kapatan bir test).
+    if (cached?.open) return cached;
+    // ':memory:' bir dosya sistemi yolu değildir — dizin oluşturma denemesi yapılmaz.
+    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   }
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.exec(SCHEMA);
+  if (shared) pool.set(dbPath, db);
   return db;
 }
 

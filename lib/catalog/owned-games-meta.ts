@@ -2,8 +2,11 @@ import type { Db } from './db';
 import { getGameMetaByIds, upsertGameMeta } from './db';
 import { fetchSteamSpyTags } from '@/lib/steamspy/client';
 import type { GameMeta, OwnedGame } from '@/lib/steam/types';
+import { isAbandoned } from '@/lib/recommend/user-vector';
+import { logError } from '@/lib/log';
 import {
-  MIN_PLAYTIME_MINUTES, OWNED_GAMES_META_CAP, STEAMSPY_FETCH_SPACING_MS,
+  MIN_PLAYTIME_MINUTES, OWNED_GAMES_META_CAP, ABANDONED_META_CAP,
+  STEAMSPY_FETCH_SPACING_MS,
 } from '@/lib/recommend/constants';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -22,21 +25,51 @@ export function selectRelevantOwnedGames(games: OwnedGame[]): OwnedGame[] {
 }
 
 /**
- * Sahip olunan (en çok oynanan, sınırlı sayıdaki) oyunların etiket meta
- * verisini yükler. Önce katalog önbelleğine bakılır (getGameMetaByIds —
- * kalite kapısı ve yayın penceresi burada uygulanmaz, ki bu doğrudur: sahip
- * olunan oyunlar çoğunlukla eski olur ve "son 90 gün" filtresini geçemez).
- * Yalnızca önbellekte bulunmayanlar için SteamSpy'a gidilir; SteamSpy
- * ~1 istek/sn sınırına saygı için istekler arasında en az
- * STEAMSPY_FETCH_SPACING_MS boşluk bırakılır. Tek bir oyunun hatası ya da
- * boş etiket kümesi döndürmesi isteğin tamamını düşürmez, o oyun atlanır.
+ * Negatif sinyal (spec §6.6) adaylarını seçer: terk edilmiş oyunlar, EN ESKİ
+ * dokunulandan başlayarak en fazla ABANDONED_META_CAP tanesi.
+ *
+ * En eskiden başlanır çünkü "bir yıldır dokunmadım" ile "üç yıldır
+ * dokunmadım" aynı güçte sinyal değildir; bütçe sınırlıysa daha kesin olan
+ * reddi almak doğrudur.
+ *
+ * Bu küme selectRelevantOwnedGames ile AYRIKTIR (biri >= 60 dk, diğeri
+ * < 30 dk ister) — I1'in kökü buydu: tek bir seçim listesi negatif sinyalin
+ * ihtiyaç duyduğu oyunları hiçbir zaman içermiyordu.
+ */
+export function selectAbandonedOwnedGames(
+  games: OwnedGame[],
+  nowSeconds: number,
+): OwnedGame[] {
+  return games
+    .filter((g) => isAbandoned(g, nowSeconds))
+    .sort((a, b) => (a.rtime_last_played ?? 0) - (b.rtime_last_played ?? 0))
+    .slice(0, ABANDONED_META_CAP);
+}
+
+/**
+ * Sahip olunan oyunların etiket meta verisini yükler. İki kümenin birleşimi
+ * çekilir: pozitif sinyali taşıyan (en çok oynanan, sınırlı sayıdaki) oyunlar
+ * ve negatif sinyali taşıyan (terk edilmiş, kendi küçük kotasıyla) oyunlar.
+ *
+ * Önce katalog önbelleğine bakılır (getGameMetaByIds — kalite kapısı ve yayın
+ * penceresi burada uygulanmaz, ki bu doğrudur: sahip olunan oyunlar çoğunlukla
+ * eski olur ve "son 90 gün" filtresini geçemez). Yalnızca önbellekte
+ * bulunmayanlar için SteamSpy'a gidilir; SteamSpy ~1 istek/sn sınırına saygı
+ * için istekler arasında en az STEAMSPY_FETCH_SPACING_MS boşluk bırakılır.
+ * Tek bir oyunun hatası ya da boş etiket kümesi döndürmesi isteğin tamamını
+ * düşürmez, o oyun atlanır (ve hata kaydedilir — sessizce yutulmaz).
  */
 export async function loadOwnedGamesMeta(
   db: Db,
   games: OwnedGame[],
   fetchImpl: typeof fetch = fetch,
+  nowSeconds: number = Date.now() / 1000,
 ): Promise<Map<number, GameMeta>> {
-  const relevant = selectRelevantOwnedGames(games);
+  const wanted = new Map<number, OwnedGame>();
+  for (const g of selectRelevantOwnedGames(games)) wanted.set(g.appid, g);
+  for (const g of selectAbandonedOwnedGames(games, nowSeconds)) wanted.set(g.appid, g);
+
+  const relevant = [...wanted.values()];
   const metaById = getGameMetaByIds(db, relevant.map((g) => g.appid));
   const missing = relevant.filter((g) => !metaById.has(g.appid));
 
@@ -64,8 +97,11 @@ export async function loadOwnedGamesMeta(
       // yazılır — kimseyi tanımlayan hiçbir alan yok (Katman 0).
       upsertGameMeta(db, meta);
       metaById.set(g.appid, meta);
-    } catch {
-      continue; // tek oyunun metadata hatası tüm isteği düşürmesin
+    } catch (e) {
+      // Tek oyunun metadata hatası tüm isteği düşürmesin. appid kamuya açık
+      // katalog bilgisidir, kişisel veri değildir — kayda alınması güvenlidir.
+      logError('owned-games-meta.steamspy', e, { appid: g.appid });
+      continue;
     }
   }
 

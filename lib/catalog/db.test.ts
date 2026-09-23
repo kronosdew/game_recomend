@@ -145,3 +145,36 @@ describe('openDb — eksik dizin oluşturma (R3)', () => {
     }
   });
 });
+
+describe('openDb — bağlantı havuzu (I4)', () => {
+  const tmpBase = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog-pool-test-'));
+
+  afterEach(() => {
+    fs.rmSync(tmpBase, { recursive: true, force: true });
+  });
+
+  it('aynı dosya yolu için AYNI bağlantıyı döner (her istekte sızdırmaz)', () => {
+    const dbPath = path.join(tmpBase, 'havuz.db');
+    const a = openDb(dbPath);
+    const b = openDb(dbPath);
+    expect(b).toBe(a);
+  });
+
+  it("':memory:' havuzlanmaz — her çağrı İZOLE bir veritabanıdır", () => {
+    const a = openDb(':memory:');
+    const b = openDb(':memory:');
+    expect(b).not.toBe(a);
+    upsertGameMeta(a, meta({ appid: 4242 }));
+    // İzolasyon bozulsaydı b, a'nın satırını görürdü.
+    expect(getGameMetaByIds(b, [4242]).size).toBe(0);
+  });
+
+  it('kapatılmış bir bağlantı yeniden açılır (bayat tanıtıcı dönmez)', () => {
+    const dbPath = path.join(tmpBase, 'kapali.db');
+    const a = openDb(dbPath);
+    a.close();
+    const b = openDb(dbPath);
+    expect(b).not.toBe(a);
+    expect(b.open).toBe(true);
+  });
+});

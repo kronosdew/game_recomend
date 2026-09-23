@@ -1,6 +1,60 @@
 # game_recomend
 
-Oyun öneri projesi. (Henüz uygulama kodu yok — şu an sadece geliştirme ortamı kurulu.)
+Steam profilindeki oynama sürelerinden bir zevk profili çıkarıp son 90 günde
+çıkmış oyunlar arasından uyanları gerekçesiyle öneren Next.js uygulaması.
+Bağlayıcı tanım: `docs/superpowers/specs/steam-oyun-onerici.md`.
+
+## Çalıştırma
+
+```bash
+npm run dev          # geliştirme sunucusu
+npm test             # vitest
+npm run build        # üretim derlemesi
+```
+
+Gereken ortam değişkenleri:
+
+| Değişken | Zorunlu | Ne için |
+|---|---|---|
+| `STEAM_API_KEY` | evet | Steam Web API. **Yalnızca sunucuda** kullanılır, istemciye hiçbir koşulda sızmaz. |
+| `APP_ORIGIN` | evet | Steam OpenID `return_to` / `realm` adresi (ör. `http://localhost:3000`). |
+| `CATALOG_PAGES` | hayır | Katalog tazeleme betiğinin tarayacağı sayfa sayısı (varsayılan 4). |
+
+## Katalog tazeleme kadansı
+
+Öneri motoru istek anında yeni çıkanları ÇEKMEZ (spec §6.2): aday havuzu
+önceden toplanıp yerel SQLite kataloğuna (`data/catalog.db`) yazılır. Bunu
+yapan betik:
+
+```bash
+npm run refresh:catalog
+```
+
+Spec §6.2 havuzun **son 90 günü** kapsamasını ister ve tek bir çalıştırma
+bunu sağlayamaz. Store araması çıkış tarihine göre azalan sıralı döner, yani
+her çalıştırma yalnızca en yeni N sürümü görür:
+
+| Ayar | Taranan appid | Kabaca kapsanan pencere | Süre |
+|---|---|---|---|
+| `pages = 4` (varsayılan) | ~200 | son ~4 gün | ~7-8 dk |
+| `CATALOG_PAGES=40` | ~2000 | son ~40 gün | ~75 dk |
+
+(Steam'e günde ~50 oyun çıkıyor.)
+
+- **Rutin: günde en az bir kez**, varsayılan ayarla. 90 günlük pencere
+  birikerek dolar ve kendini günceller. Atlanan bir gün, o güne ait
+  çıkışların pencereye hiç girmemesi demektir.
+- **İlk doldurma:** katalog boşken tek seferlik `CATALOG_PAGES=40` (veya daha
+  fazlası) ile çalıştırın, sonra günlük rutine dönün. Katalog boşken uygulama
+  "katalog henüz hazır değil" der — kullanıcıyı suçlamaz.
+- Betikteki `delayMs` (1100 ms) **düşürülmemelidir**: SteamSpy ~1 istek/sn,
+  Store ~200 istek/5 dk sınırına sahiptir.
+
+Örnek cron (her gün 04:30):
+
+```
+30 4 * * *  cd /uygulama && npm run refresh:catalog >> /var/log/katalog.log 2>&1
+```
 
 ## Claude Code eklentileri
 

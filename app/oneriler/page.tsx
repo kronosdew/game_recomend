@@ -5,19 +5,14 @@ import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { GameCard } from "@/components/GameCard";
 import { PrivacyHelp } from "@/components/PrivacyHelp";
-
-interface Recommendation {
-  appid: number;
-  name: string;
-  score: number;
-  releaseDate: string;
-  reason: string;
-  tags: string[];
-}
-
-type RecommendResponse =
-  | { count: number; recommendations: Recommendation[] }
-  | { error: string };
+import {
+  produceRecommendations,
+  recommendErrorCode,
+  type RecommendErrorCode,
+  type RecommendationResult,
+} from "@/lib/server/recommendations";
+import { logError } from "@/lib/log";
+import { STEAM_ID_COOKIE, DEMO_PROFILE_COOKIE } from "@/lib/cookies";
 
 function Sayfa({ children }: { children: ReactNode }) {
   return (
@@ -37,15 +32,33 @@ function GeriDon() {
   );
 }
 
-export default async function OnerilerPage({ searchParams }: PageProps<"/oneriler">) {
-  const sp = await searchParams;
-  const profileParam = typeof sp.profile === "string" ? sp.profile : undefined;
+function Hata({
+  baslik,
+  children,
+}: {
+  baslik: string;
+  children: ReactNode;
+}) {
+  return (
+    <Sayfa>
+      <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
+      <Alert variant="destructive">
+        <AlertTitle>{baslik}</AlertTitle>
+        <AlertDescription>{children}</AlertDescription>
+      </Alert>
+      <GeriDon />
+    </Sayfa>
+  );
+}
 
+export default async function OnerilerPage() {
   const cookieStore = await cookies();
-  const steamId = cookieStore.get("steam_id")?.value;
-
-  // Girişli hesap her zaman öncelikli; yoksa link yapıştırma (stateless demo) kullanılır.
-  const profile = steamId ?? profileParam;
+  // Girişli hesap her zaman öncelikli; yoksa link yapıştırma (stateless demo).
+  // Profil adresi artık URL'de DEĞİL, httpOnly çerezde taşınır (I8) — böylece
+  // sunucu erişim kayıtlarına ve tarayıcı geçmişine düşmez.
+  const profile =
+    cookieStore.get(STEAM_ID_COOKIE)?.value ??
+    cookieStore.get(DEMO_PROFILE_COOKIE)?.value;
 
   if (!profile) {
     return (
@@ -63,95 +76,97 @@ export default async function OnerilerPage({ searchParams }: PageProps<"/onerile
     );
   }
 
-  const origin = process.env.APP_ORIGIN;
-  if (!origin) {
-    return (
-      <Sayfa>
-        <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
-        <Alert variant="destructive">
-          <AlertTitle>Sunucu yapılandırması eksik</AlertTitle>
-          <AlertDescription>Lütfen daha sonra tekrar deneyin.</AlertDescription>
-        </Alert>
-        <GeriDon />
-      </Sayfa>
-    );
-  }
-
-  let data: RecommendResponse;
+  // I7: öneri boru hattı burada DOĞRUDAN çağrılır. Sayfa eskiden kendi API
+  // route'una APP_ORIGIN üzerinden bir HTTP isteği atıyordu; bu ağ turu
+  // gereksiz, kırılgan (APP_ORIGIN yanlışsa sayfa çalışmaz) ve soğuk isteğin
+  // süresine doğrudan katkı veriyordu. API route dışarıya açık kalır.
+  let data: RecommendationResult | null = null;
+  let hata: RecommendErrorCode | null = null;
   try {
-    const res = await fetch(`${origin}/api/recommend`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ profile }),
-      cache: "no-store",
-    });
-    data = (await res.json()) as RecommendResponse;
-  } catch {
-    data = { error: "unknown" };
+    data = await produceRecommendations(profile);
+  } catch (e) {
+    hata = recommendErrorCode(e).code;
+    if (hata === "unknown" || hata === "config_missing") {
+      logError("page.oneriler", e, { code: hata });
+    }
   }
 
-  if ("error" in data) {
-    if (data.error === "private_profile") {
-      return (
-        <Sayfa>
-          <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
-          <PrivacyHelp />
-          <GeriDon />
-        </Sayfa>
-      );
-    }
-
-    if (data.error === "vanity_not_found") {
-      return (
-        <Sayfa>
-          <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
-          <Alert variant="destructive">
-            <AlertTitle>Profil bulunamadı</AlertTitle>
-            <AlertDescription>
-              Bu özel adrese sahip profil bulunamadı.
-            </AlertDescription>
-          </Alert>
-          <GeriDon />
-        </Sayfa>
-      );
-    }
-
-    if (data.error === "invalid_url") {
-      return (
-        <Sayfa>
-          <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
-          <Alert variant="destructive">
-            <AlertTitle>Adres tanınamadı</AlertTitle>
-            <AlertDescription>Adresi kontrol edin.</AlertDescription>
-          </Alert>
-          <GeriDon />
-        </Sayfa>
-      );
-    }
-
-    // Belgelenmiş üç koddan biri değil (ör. 'unknown' ya da beklenmeyen bir
-    // sunucu hatası) — genel özür mesajı gösterilir, dahili ayrıntı sızdırılmaz.
+  if (hata === "private_profile") {
     return (
       <Sayfa>
         <h1 className="text-2xl font-semibold">Öneri alınamadı</h1>
-        <Alert variant="destructive">
-          <AlertTitle>Bir şeyler ters gitti</AlertTitle>
-          <AlertDescription>Lütfen daha sonra tekrar deneyin.</AlertDescription>
-        </Alert>
+        <PrivacyHelp />
         <GeriDon />
       </Sayfa>
     );
   }
 
+  // R26: var olmayan hesaba ASLA gizlilik ayarı talimatı verilmez.
+  if (hata === "profile_not_found") {
+    return (
+      <Hata baslik="Bu Steam profili bulunamadı">
+        Girilen SteamID64 ile eşleşen bir Steam hesabı yok. Numarayı kontrol
+        edin ya da profil adresinizi olduğu gibi yapıştırın.
+      </Hata>
+    );
+  }
+
+  if (hata === "vanity_not_found") {
+    return (
+      <Hata baslik="Profil bulunamadı">
+        Bu özel adrese sahip profil bulunamadı.
+      </Hata>
+    );
+  }
+
+  if (hata === "invalid_url") {
+    return <Hata baslik="Adres tanınamadı">Adresi kontrol edin.</Hata>;
+  }
+
+  if (hata === "upstream_timeout") {
+    return (
+      <Hata baslik="Steam şu anda yanıt vermiyor">
+        İstek zaman aşımına uğradı. Bu geçici bir durum; birkaç dakika sonra
+        tekrar deneyin.
+      </Hata>
+    );
+  }
+
+  if (hata === "config_missing") {
+    return (
+      <Hata baslik="Sunucu yapılandırması eksik">
+        Lütfen daha sonra tekrar deneyin.
+      </Hata>
+    );
+  }
+
+  if (hata !== null || data === null) {
+    // Belgelenmiş kodlardan biri değil — genel özür mesajı gösterilir,
+    // dahili ayrıntı sızdırılmaz.
+    return (
+      <Hata baslik="Bir şeyler ters gitti">
+        Lütfen daha sonra tekrar deneyin.
+      </Hata>
+    );
+  }
+
+  // I2: `count: 0` iki bambaşka durumu anlatır ve kullanıcıyı suçlamamalıdır.
   if (data.count === 0) {
+    const katalogBos = data.poolSize === 0;
     return (
       <Sayfa>
-        <h1 className="text-2xl font-semibold">Öneri bulunamadı</h1>
+        <h1 className="text-2xl font-semibold">
+          {katalogBos ? "Katalog henüz hazır değil" : "Sana uyan yeni çıkan bulunamadı"}
+        </h1>
         <Alert>
-          <AlertTitle>Öneri bulunamadı</AlertTitle>
           <AlertDescription>
-            Kütüphanenizde 60 dakikadan fazla oynanmış yeterli oyun
-            bulamadık.
+            {katalogBos
+              ? "Son 90 günün oyun kataloğu henüz doldurulmadı, bu yüzden " +
+                "karşılaştıracak aday yok. Bu bizden kaynaklanıyor; kısa süre " +
+                "sonra tekrar deneyin."
+              : "Son 90 günde çıkan oyunlar arasında zevkinle örtüşen bir " +
+                "şey bulamadık. Uydurma öneri vermektense boş liste " +
+                "göstermeyi tercih ediyoruz; yeni oyunlar çıktıkça tekrar bakın."}
           </AlertDescription>
         </Alert>
         <GeriDon />
